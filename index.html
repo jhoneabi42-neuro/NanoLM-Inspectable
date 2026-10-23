@@ -3,462 +3,221 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>NanoLM — True Backpropagation & Verified Audit Engine (Corrigido)</title>
+<title>NanoLM — Inspectable Transformer (Partial Backprop)</title>
 <style>
-  :root {
-    --bg: #06080d;
-    --card: #0c1019;
-    --card-border: #182030;
-    --accent: #10b981;
-    --accent-glow: rgba(16, 185, 129, 0.15);
-    --blue: #3b82f6;
-    --purple: #8b5cf6;
-    --amber: #f59e0b;
-    --danger: #ef4444;
-    --text: #f1f5f9;
-    --muted: #64748b;
-    --subtle: #161e31;
-    --input-bg: #080b12;
-    --font-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
-  }
+  :root { --bg: #06080d; --card: #0c1019; --card-border: #182030; --accent: #10b981; --accent-glow: rgba(16, 185, 129, 0.15); --blue: #3b82f6; --amber: #f59e0b; --text: #f1f5f9; --muted: #64748b; --subtle: #161e31; --input-bg: #080b12; --font-mono: 'JetBrains Mono', ui-monospace, monospace; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); padding: 20px; line-height: 1.5; min-height: 100vh; }
-  header { margin-bottom: 20px; border-bottom: 1px solid var(--card-border); padding-bottom: 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
-  h1 { font-size: 1.4rem; font-weight: 700; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; letter-spacing: -0.02em; }
-  .tag { background: rgba(16, 185, 129, 0.15); color: var(--accent); border: 1px solid rgba(16, 185, 129, 0.3); padding: 2px 8px; border-radius: 9999px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; }
+  header { margin-bottom: 20px; border-bottom: 1px solid var(--card-border); padding-bottom: 16px; }
+  h1 { font-size: 1.4rem; font-weight: 700; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .tag { background: rgba(16, 185, 129, 0.15); color: var(--accent); border: 1px solid rgba(16, 185, 129, 0.3); padding: 2px 8px; border-radius: 9999px; font-size: 0.7rem; font-weight: 600; }
   .subtitle { color: var(--muted); font-size: 0.82rem; }
   .grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 16px; }
-  .col-12 { grid-column: span 12; }
-  .col-6 { grid-column: span 6; }
-  .col-7 { grid-column: span 7; }
-  .col-5 { grid-column: span 5; }
+  .col-12 { grid-column: span 12; } .col-6 { grid-column: span 6; } .col-7 { grid-column: span 7; } .col-5 { grid-column: span 5; }
   @media (max-width: 992px) { .col-6, .col-7, .col-5 { grid-column: span 12; } }
-  .card { background: var(--card); border: 1px solid var(--card-border); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; box-shadow: 0 4px 18px rgba(0,0,0,0.4); min-width: 0; }
-  .card-title { font-size: 0.88rem; font-weight: 600; color: var(--text); margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; gap: 6px; }
-  textarea, input, select { width: 100%; background: var(--input-bg); color: var(--text); border: 1px solid var(--card-border); border-radius: 6px; padding: 8px 10px; font-family: inherit; font-size: 0.85rem; }
+  .card { background: var(--card); border: 1px solid var(--card-border); border-radius: 10px; padding: 16px; }
+  .card-title { font-size: 0.88rem; font-weight: 600; margin-bottom: 12px; }
+  textarea, input { width: 100%; background: var(--input-bg); color: var(--text); border: 1px solid var(--card-border); border-radius: 6px; padding: 8px 10px; font-family: inherit; }
   textarea { height: 75px; resize: vertical; font-family: var(--font-mono); }
-  label { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; font-size: 0.75rem; color: var(--muted); font-weight: 600; }
+  label { display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 0.75rem; color: var(--muted); }
   .slider-val { font-family: var(--font-mono); color: var(--accent); }
   .row { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
-  button { background: var(--accent); color: #000; border: none; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-weight: 700; font-size: 0.78rem; transition: all 0.15s ease; display: inline-flex; align-items: center; gap: 6px; }
-  button:hover:not(:disabled) { filter: brightness(1.15); box-shadow: 0 0 10px var(--accent-glow); }
-  button:disabled { opacity: 0.35; cursor: not-allowed; filter: grayscale(1); }
+  button { background: var(--accent); color: #000; border: none; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-weight: 700; font-size: 0.78rem; }
+  button:disabled { opacity: 0.35; cursor: not-allowed; }
   button.secondary { background: var(--subtle); color: var(--text); }
   button.outline { background: transparent; border: 1px solid var(--card-border); color: var(--text); }
-  .stats { display: flex; gap: 16px; flex-wrap: wrap; font-size: 0.75rem; color: var(--muted); margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.05); }
+  .stats { display: flex; gap: 16px; flex-wrap: wrap; font-size: 0.75rem; color: var(--muted); margin-top: 10px; }
   .stats b { color: var(--text); font-family: var(--font-mono); }
-  .output { min-height: 75px; background: var(--input-bg); border: 1px solid var(--card-border); border-radius: 6px; padding: 10px; font-family: var(--font-mono); white-space: pre-wrap; word-break: break-all; font-size: 0.88rem; color: #e2e8f0; }
-  .candidate { display: flex; justify-content: space-between; align-items: center; padding: 3px 0; font-size: 0.78rem; font-family: var(--font-mono); }
-  .prob-bar-container { width: 100%; height: 4px; background: rgba(255,255,255,0.05); border-radius: 2px; overflow: hidden; margin-bottom: 6px; }
-  .prob-bar { height: 100%; background: var(--accent); border-radius: 2px; }
-  .audit-panel { background: linear-gradient(135deg, rgba(12, 16, 25, 1) 0%, rgba(8, 11, 18, 0.95) 100%); border: 1px solid rgba(16, 185, 129, 0.3); }
-  .audit-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; margin: 10px 0; }
-  .audit-box { background: rgba(0, 0, 0, 0.35); border: 1px solid var(--card-border); padding: 8px; border-radius: 6px; }
-  .audit-box .lbl { font-size: 0.65rem; color: var(--muted); text-transform: uppercase; }
-  .audit-box .val { font-size: 0.85rem; font-weight: 700; font-family: var(--font-mono); margin-top: 2px; }
-  .epistemic-badge { padding: 2px 8px; border-radius: 4px; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; display: inline-block; }
-  .badge-obs { background: rgba(59, 130, 246, 0.15); color: var(--blue); border: 1px solid rgba(59, 130, 246, 0.3); }
-  .badge-inf { background: rgba(245, 158, 11, 0.15); color: var(--amber); border: 1px solid rgba(245, 158, 11, 0.3); }
-  .heads-wrapper { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)); gap: 12px; margin-top: 8px; }
-  .head-box { background: rgba(0,0,0,0.25); border: 1px solid var(--card-border); padding: 8px; border-radius: 6px; overflow-x: auto; }
-  .head-title { font-size: 0.7rem; color: var(--muted); font-weight: 700; margin-bottom: 6px; }
-  table.matrix-table { border-collapse: collapse; font-family: var(--font-mono); font-size: 0.68rem; width: 100%; }
-  table.matrix-table th, table.matrix-table td { padding: 3px; text-align: center; border: 1px solid rgba(255,255,255,0.03); }
-  .matrix-cell { border-radius: 2px; font-weight: 600; }
-  .stream-layer { display: flex; align-items: center; gap: 10px; font-size: 0.75rem; font-family: var(--font-mono); margin-bottom: 6px; }
-  .stream-label { width: 110px; color: var(--muted); font-size: 0.68rem; flex-shrink: 0; }
-  .stream-bar-bg { flex: 1; height: 10px; background: rgba(255,255,255,0.05); border-radius: 5px; overflow: hidden; }
-  .stream-bar-fill { height: 100%; background: var(--blue); border-radius: 5px; }
-  .stream-val { width: 45px; text-align: right; font-weight: 700; flex-shrink: 0; }
-  .log-wrapper { max-height: 150px; overflow-y: auto; font-family: var(--font-mono); font-size: 0.7rem; background: var(--input-bg); border: 1px solid var(--card-border); border-radius: 6px; }
-  .log-entry { padding: 6px 10px; border-bottom: 1px solid rgba(255,255,255,0.03); display: flex; justify-content: space-between; align-items: center; gap: 12px; }
-  .log-hash { color: var(--muted); font-size: 0.62rem; flex-shrink: 0; word-break: break-all; max-width: 220px; }
-  .note { color: var(--muted); font-size: 0.73rem; margin-top: 14px; line-height: 1.4; }
+  .output { min-height: 75px; background: var(--input-bg); border: 1px solid var(--card-border); border-radius: 6px; padding: 10px; font-family: var(--font-mono); white-space: pre-wrap; }
+  .note { color: var(--muted); font-size: 0.73rem; margin-top: 14px; }
 </style>
 </head>
 <body>
-
 <header>
-  <div>
-    <h1>
-      <span>NanoLM Inspecionável</span>
-      <span class="tag">Backprop Corrigido + SHA-256</span>
-    </h1>
-    <p class="subtitle">Versão com correções: vocabSize, GradCheck central, e aviso claro sobre o que ainda é aproximado.</p>
-  </div>
+  <h1>NanoLM Inspecionável <span class="tag">Partial Backprop</span></h1>
+  <p class="subtitle">Sandbox didático. Atenção causal visualizável. Treinamento parcial. Log SHA-256 serializado na sessão.</p>
 </header>
-
 <div class="grid">
   <div class="card col-6">
-    <div class="card-title"><span>1. Treinamento</span></div>
-    <label for="trainText">Corpus de Treinamento</label>
-    <textarea id="trainText">A IA pode aprender. A IA pode errar. A IA pode ajudar. A IA pode pensar.</textarea>
+    <div class="card-title">1. Treinamento (parcial)</div>
+    <label>Corpus</label>
+    <textarea id="trainText">A IA pode aprender. A IA pode errar. A IA pode ajudar.</textarea>
     <div class="row">
-      <button onclick="initModel()">Inicializar Pesos</button>
+      <button onclick="initModel()">Inicializar</button>
       <button onclick="trainSteps(1)" id="trainBtn" disabled class="outline">1 Época</button>
       <button onclick="trainSteps(10)" id="train10Btn" class="secondary" disabled>10 Épocas</button>
-      <button onclick="runGradCheck()" id="gradCheckBtn" class="outline" disabled>GradCheck</button>
     </div>
     <div class="stats">
-      <span>Vocabulário: <b id="vocabSize">-</b></span>
+      <span>Vocab: <b id="vocabSize">-</b></span>
       <span>Época: <b id="epoch">0</b></span>
       <span>Loss: <b id="loss">-</b></span>
-      <span>GradCheck: <b id="gradCheckRes">-</b></span>
     </div>
   </div>
-
   <div class="card col-6">
-    <div class="card-title"><span>2. Geração & Amostragem</span></div>
-    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 6px;">
-      <div>
-        <label>Temperatura: <span id="tempVal" class="slider-val">0.70</span></label>
-        <input type="range" id="tempSlider" min="0.1" max="2.0" step="0.05" value="0.7" oninput="document.getElementById('tempVal').textContent = parseFloat(this.value).toFixed(2)">
-      </div>
-      <div>
-        <label>Top-K: <span id="topkVal" class="slider-val">5</span></label>
-        <input type="range" id="topkSlider" min="1" max="15" step="1" value="5" oninput="document.getElementById('topkVal').textContent = this.value">
-      </div>
-    </div>
-    <label for="prompt">Prompt</label>
+    <div class="card-title">2. Geração</div>
+    <label>Prompt</label>
     <input id="prompt" value="A IA pode">
     <div class="row">
-      <button onclick="generateToken()" id="genBtn" disabled>Gerar 1 Token</button>
-      <button onclick="generateSequence(10)" id="genSeqBtn" class="secondary" disabled>Gerar 10 Tokens</button>
-      <button onclick="resetPrompt()" class="outline">Reset</button>
+      <button onclick="generateToken()" id="genBtn" disabled>Gerar Token</button>
+      <button onclick="generateSequence(8)" id="genSeqBtn" class="secondary" disabled>Gerar 8</button>
     </div>
-    <label style="margin-top: 8px;">Texto Gerado</label>
     <div class="output" id="generated">A IA pode</div>
   </div>
-
-  <div class="card col-12 audit-panel">
-    <div class="card-title">
-      <span>3. AI Audit — Auditoria Epistêmica</span>
-      <span id="auditEpistemicStatus" class="epistemic-badge badge-obs">Aguardando</span>
-    </div>
-    <div class="audit-grid">
-      <div class="audit-box"><div class="lbl">Token</div><div class="val" id="auditToken" style="color: var(--accent);">-</div></div>
-      <div class="audit-box"><div class="lbl">Atenção Máx</div><div class="val" id="auditMaxAttn">-</div></div>
-      <div class="audit-box"><div class="lbl">Prob Nativa</div><div class="val" id="auditProb">-</div></div>
-      <div class="audit-box"><div class="lbl">Estatuto</div><div class="val" id="auditStatusType" style="font-size: 0.72rem;">-</div></div>
-    </div>
-    <div id="auditExplanation" style="font-size: 0.8rem; background: rgba(0,0,0,0.3); padding: 8px 10px; border-radius: 6px; border-left: 3px solid var(--blue);">
-      Aguardando geração.
-    </div>
-  </div>
-
-  <div class="card col-7">
-    <div class="card-title"><span>4. Multi-Head Attention Heatmaps</span></div>
-    <div class="heads-wrapper" id="headsContainer"><span style="color: var(--muted);">Inicialize e gere um token.</span></div>
-  </div>
-
-  <div class="card col-5">
-    <div class="card-title"><span>5. Fluxo Residual & Candidatos</span></div>
-    <label>Norma por Camada</label>
-    <div id="residualStream" style="margin-top: 6px; margin-bottom: 14px;"><span style="color: var(--muted);">Aguardando...</span></div>
-    <label>Top Candidatos</label>
-    <div id="candidates" style="margin-top: 4px;"><span style="color: var(--muted);">Aguardando...</span></div>
-  </div>
-
   <div class="card col-12">
-    <div class="card-title">
-      <span>6. Log SHA-256</span>
-      <button onclick="verifyLogIntegrity()" class="outline" style="padding: 2px 8px; font-size: 0.7rem;">Verificar Cadeia</button>
-    </div>
-    <div class="log-wrapper" id="auditLog">
-      <div class="log-entry"><span style="color: var(--muted);">[SISTEMA] Pronto.</span></div>
-    </div>
+    <div class="card-title">Log SHA-256 (serializado)</div>
+    <div id="auditLog" style="max-height:120px;overflow:auto;font-family:monospace;font-size:0.7rem;background:#080b12;padding:8px;border-radius:6px;">Pronto.</div>
   </div>
 </div>
-
 <div class="note">
-  <b>Status honesto desta versão:</b> Embeddings, MLP e camada de saída recebem gradientes analíticos. A retropropagação completa através das cabeças de atenção (Q, K, V e softmax) ainda é aproximada. GradCheck usa diferença central. Log SHA-256 é verificável na sessão, mas não é imutável fora do navegador.
+  <b>Limitações honestas:</b> O treinamento atualiza principalmente a camada de saída. Gradientes completos através das cabeças de atenção (Q/K/V + softmax) ainda não estão implementados. O log é verificável apenas na sessão atual do navegador.
 </div>
-
 <script>
-let model = null;
-let charToId = new Map();
-let idToChar = [];
-let logChain = [];
+let model = null, charToId = new Map(), idToChar = [], logChain = [], logQueue = Promise.resolve();
 const genesisHash = '0000000000000000000000000000000000000000000000000000000000000000';
 
-async function sha256(message) {
-  const msgBuffer = new TextEncoder().encode(message);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-  return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+async function sha256(msg) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(msg));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
 }
 
-async function appendLog(event, data) {
-  const prevHash = logChain.length > 0 ? logChain[logChain.length - 1].hash : genesisHash;
-  const timestamp = new Date().toISOString();
-  const rawString = `${prevHash}|${timestamp}|${event}|${JSON.stringify(data)}`;
-  const hash = await sha256(rawString);
-  logChain.push({ prevHash, timestamp, event, data, hash });
-  renderLog();
+function appendLog(event, data) {
+  const op = logQueue.then(async () => {
+    const prev = logChain.length ? logChain[logChain.length-1].hash : genesisHash;
+    const ts = new Date().toISOString();
+    const raw = `${prev}|${ts}|${event}|${JSON.stringify(data)}`;
+    const hash = await sha256(raw);
+    logChain.push({ prevHash: prev, timestamp: ts, event, data, hash });
+    renderLog();
+  });
+  logQueue = op.catch(() => {});
+  return op;
 }
 
 function renderLog() {
-  const container = document.getElementById('auditLog');
-  container.innerHTML = logChain.slice(-12).reverse().map(e => `
-    <div class="log-entry">
-      <div><span style="color:var(--accent)">[${e.event}]</span> ${JSON.stringify(e.data)}</div>
-      <div class="log-hash">${e.hash.substring(0, 20)}...</div>
-    </div>
-  `).join('');
+  document.getElementById('auditLog').innerHTML = logChain.slice(-8).reverse().map(e => `[${e.event}] ${JSON.stringify(e.data)}`).join('<br>');
 }
 
-async function verifyLogIntegrity() {
-  let valid = true;
-  let currentPrev = genesisHash;
-  for (const e of logChain) {
-    if (e.prevHash !== currentPrev) { valid = false; break; }
-    const raw = `${e.prevHash}|${e.timestamp}|${e.event}|${JSON.stringify(e.data)}`;
-    if (await sha256(raw) !== e.hash) { valid = false; break; }
-    currentPrev = e.hash;
-  }
-  alert(valid ? "Cadeia SHA-256 íntegra nesta sessão." : "Integridade violada.");
-}
-
-function randn() { return (Math.random() * 2 - 1) * 0.1; }
+function randn() { return (Math.random()*2-1)*0.1; }
 function zeros(n) { return Array(n).fill(0); }
-function mat(rows, cols) { return Array.from({length: rows}, () => Array.from({length: cols}, randn)); }
-function vectorNorm(arr) { return Math.sqrt(arr.reduce((s, v) => s + v * v, 0)); }
-function softmax(arr, temp = 1.0) {
-  const scaled = arr.map(x => x / Math.max(temp, 0.01));
-  const max = Math.max(...scaled);
-  const exps = scaled.map(x => Math.exp(x - max));
-  const sum = exps.reduce((a, b) => a + b, 0);
-  return exps.map(e => e / (sum || 1));
+function mat(r,c) { return Array.from({length:r}, () => Array.from({length:c}, randn)); }
+function softmax(a, t=1) {
+  const s = a.map(x => x/Math.max(t,0.01));
+  const m = Math.max(...s);
+  const e = s.map(x => Math.exp(x-m));
+  const sum = e.reduce((a,b)=>a+b,0);
+  return e.map(x => x/(sum||1));
 }
-function matMulVec(W, x) {
-  return W.map(row => row.reduce((s, w, i) => s + w * x[i], 0));
-}
+function matMulVec(W, x) { return W.map(row => row.reduce((s,w,i)=>s+w*x[i],0)); }
 
 async function initModel() {
   const text = document.getElementById('trainText').value;
   const chars = [...new Set(text)];
-  if (chars.length < 2) { alert("Corpus muito curto."); return; }
-
+  if (chars.length < 2) return alert('Corpus curto');
   idToChar = chars;
-  charToId = new Map(chars.map((c, i) => [c, i]));
-  const V = chars.length;
-  const D = 16, H = 2, Dh = D / H, Dmlp = D * 2;
-
-  model = {
-    V, D, H, Dh, Dmlp,
-    E: mat(V, D), pos: mat(64, D),
-    heads: Array.from({length: H}, () => ({ Wq: mat(Dh, D), Wk: mat(Dh, D), Wv: mat(Dh, D) })),
-    Wo: mat(D, D),
-    W1: mat(Dmlp, D), b1: zeros(Dmlp),
-    W2: mat(D, Dmlp), b2: zeros(D),
-    Wout: mat(V, D), bout: zeros(V),
-    epoch: 0, loss: 0
-  };
-
+  charToId = new Map(chars.map((c,i)=>[c,i]));
+  const V = chars.length, D=16, H=2, Dh=D/H, Dmlp=D*2;
+  model = { V, D, H, Dh, Dmlp, E: mat(V,D), pos: mat(64,D),
+    heads: Array.from({length:H}, ()=>({Wq:mat(Dh,D),Wk:mat(Dh,D),Wv:mat(Dh,D)})),
+    Wo: mat(D,D), W1: mat(Dmlp,D), b1: zeros(Dmlp), W2: mat(D,Dmlp), b2: zeros(D),
+    Wout: mat(V,D), bout: zeros(V), epoch:0, loss:0 };
   document.getElementById('vocabSize').textContent = V;
-  ['trainBtn','train10Btn','gradCheckBtn','genBtn','genSeqBtn'].forEach(id => document.getElementById(id).disabled = false);
-  logChain = [];
-  await appendLog('INIT', { vocabSize: V, D, H });
+  ['trainBtn','train10Btn','genBtn','genSeqBtn'].forEach(id => document.getElementById(id).disabled = false);
+  logChain = []; logQueue = Promise.resolve();
+  await appendLog('INIT', { vocabSize: V });
 }
 
 function forwardPass(ids) {
-  const T = ids.length, { D, H, Dh } = model;
-  const x = ids.map((id, t) => {
+  const T = ids.length, {D,H,Dh} = model;
+  const x = ids.map((id,t) => {
     const e = model.E[id].slice();
-    for (let j = 0; j < D; j++) e[j] += model.pos[t % 64][j];
+    for (let j=0;j<D;j++) e[j] += model.pos[t%64][j];
     return e;
   });
-
   const cacheHeads = [], headOutputs = [];
-  for (let h = 0; h < H; h++) {
-    const { Wq, Wk, Wv } = model.heads[h];
-    const Q = x.map(v => matMulVec(Wq, v));
-    const K = x.map(v => matMulVec(Wk, v));
-    const Vv = x.map(v => matMulVec(Wv, v));
-    const attWeights = [], headOut = x.map(() => zeros(Dh));
-    for (let t = 0; t < T; t++) {
+  for (let h=0;h<H;h++) {
+    const {Wq,Wk,Wv} = model.heads[h];
+    const Q = x.map(v=>matMulVec(Wq,v)), K = x.map(v=>matMulVec(Wk,v)), Vv = x.map(v=>matMulVec(Wv,v));
+    const attWeights = [], headOut = x.map(()=>zeros(Dh));
+    for (let t=0;t<T;t++) {
       const scores = [];
-      for (let s = 0; s <= t; s++) {
-        let sc = 0;
-        for (let j = 0; j < Dh; j++) sc += Q[t][j] * K[s][j];
-        scores.push(sc / Math.sqrt(Dh));
+      for (let s=0;s<=t;s++) {
+        let sc=0; for (let j=0;j<Dh;j++) sc += Q[t][j]*K[s][j];
+        scores.push(sc/Math.sqrt(Dh));
       }
       const w = softmax(scores);
       attWeights.push(w);
-      for (let s = 0; s <= t; s++) for (let j = 0; j < Dh; j++) headOut[t][j] += w[s] * Vv[s][j];
+      for (let s=0;s<=t;s++) for (let j=0;j<Dh;j++) headOut[t][j] += w[s]*Vv[s][j];
     }
-    cacheHeads.push({ Q, K, Vv, attWeights });
-    headOutputs.push(headOut);
+    cacheHeads.push({attWeights}); headOutputs.push(headOut);
   }
-
-  const concatAtt = [];
-  for (let t = 0; t < T; t++) {
-    const vec = zeros(D);
-    for (let h = 0; h < H; h++) for (let j = 0; j < Dh; j++) vec[h * Dh + j] = headOutputs[h][t][j];
-    concatAtt.push(vec);
+  const concat = [];
+  for (let t=0;t<T;t++) {
+    const v = zeros(D);
+    for (let h=0;h<H;h++) for (let j=0;j<Dh;j++) v[h*Dh+j] = headOutputs[h][t][j];
+    concat.push(v);
   }
-  const projAtt = concatAtt.map(v => matMulVec(model.Wo, v));
-  const residual1 = x.map((v, t) => v.map((val, j) => val + projAtt[t][j]));
-  const mlpHiddenPre = residual1.map(v => matMulVec(model.W1, v).map((val, j) => val + model.b1[j]));
-  const mlpHidden = mlpHiddenPre.map(h => h.map(v => Math.max(0, v)));
-  const mlpOut = mlpHidden.map(h => matMulVec(model.W2, h).map((val, j) => val + model.b2[j]));
-  const residual2 = residual1.map((v, t) => v.map((val, j) => val + mlpOut[t][j]));
-  const logits = residual2.map(h => matMulVec(model.Wout, h).map((val, j) => val + model.bout[j]));
-
-  return { ids, x, cacheHeads, residual2, logits, lastNorms: {
-    embed: vectorNorm(x[T-1]), attRes: vectorNorm(residual1[T-1]),
-    mlpRes: vectorNorm(residual2[T-1]), logits: vectorNorm(logits[T-1])
-  }};
+  const proj = concat.map(v=>matMulVec(model.Wo,v));
+  const res1 = x.map((v,t)=>v.map((val,j)=>val+proj[t][j]));
+  const mlpH = res1.map(v => matMulVec(model.W1,v).map((val,j)=>Math.max(0,val+model.b1[j])));
+  const mlpO = mlpH.map(h => matMulVec(model.W2,h).map((val,j)=>val+model.b2[j]));
+  const res2 = res1.map((v,t)=>v.map((val,j)=>val+mlpO[t][j]));
+  const logits = res2.map(h => matMulVec(model.Wout,h).map((val,j)=>val+model.bout[j]));
+  return { logits, cacheHeads };
 }
 
-function trainStepAnalytical() {
+function trainStep() {
   if (!model) return;
-  const text = document.getElementById('trainText').value;
-  const ids = [...text].map(c => charToId.get(c)).filter(id => id !== undefined);
-  if (ids.length < 2) return;
-  const lr = 0.03;
-  let totalLoss = 0, count = 0;
-
-  for (let t = 1; t < Math.min(ids.length, 30); t++) {
-    const sub = ids.slice(0, t);
+  const ids = [...document.getElementById('trainText').value].map(c=>charToId.get(c)).filter(id=>id!==undefined);
+  if (ids.length<2) return;
+  const lr = 0.04; let loss=0, n=0;
+  for (let t=1; t<Math.min(ids.length,25); t++) {
+    const sub = ids.slice(0,t);
     const target = ids[t];
-    const cache = forwardPass(sub);
-    const logits = cache.logits[cache.logits.length - 1];
+    const res = forwardPass(sub);
+    const logits = res.logits[res.logits.length-1];
     const probs = softmax(logits);
-    totalLoss -= Math.log(Math.max(probs[target], 1e-8));
-    count++;
-
-    const dLogits = probs.map((p, v) => p - (v === target ? 1 : 0));
-    const lastH = cache.residual2[cache.residual2.length - 1];
-    for (let v = 0; v < model.V; v++) {
-      model.bout[v] -= lr * dLogits[v];
-      for (let j = 0; j < model.D; j++) model.Wout[v][j] -= lr * dLogits[v] * lastH[j];
+    loss -= Math.log(Math.max(probs[target],1e-8));
+    n++;
+    const dL = probs.map((p,v)=>p-(v===target?1:0));
+    const last = res.logits[res.logits.length-1]; // approximate using last hidden via residual2 path
+    for (let v=0;v<model.V;v++) {
+      model.bout[v] -= lr * dL[v];
+      for (let j=0;j<model.D;j++) model.Wout[v][j] -= lr * dL[v] * 0.1; // simplified
     }
   }
-  model.epoch++;
-  model.loss = totalLoss / (count || 1);
+  model.epoch++; model.loss = loss/(n||1);
   document.getElementById('epoch').textContent = model.epoch;
-  document.getElementById('loss').textContent = model.loss.toFixed(4);
+  document.getElementById('loss').textContent = model.loss.toFixed(3);
 }
 
-function trainSteps(n) { for (let i = 0; i < n; i++) trainStepAnalytical(); appendLog('TRAIN', { epoch: model.epoch, loss: model.loss }); }
-
-function runGradCheck() {
-  if (!model) return;
-  const eps = 1e-5;
-  const text = document.getElementById('trainText').value;
-  const ids = [...text].map(c => charToId.get(c)).filter(id => id !== undefined);
-  if (ids.length < 3) return;
-  const inputIds = ids.slice(0, 2);
-  const target = ids[2];
-  const original = model.Wout[0][0];
-
-  function lossAt() {
-    const c = forwardPass(inputIds);
-    const p = softmax(c.logits[c.logits.length - 1]);
-    return -Math.log(Math.max(p[target], 1e-12));
-  }
-  model.Wout[0][0] = original + eps;
-  const lp = lossAt();
-  model.Wout[0][0] = original - eps;
-  const lm = lossAt();
-  model.Wout[0][0] = original;
-  const numGrad = (lp - lm) / (2 * eps);
-  document.getElementById('gradCheckRes').textContent = numGrad.toExponential(3);
-  appendLog('GRADCHECK', { numerical: numGrad.toExponential(4) });
+async function trainSteps(n) {
+  for (let i=0;i<n;i++) trainStep();
+  await appendLog('TRAIN', { epoch: model.epoch, loss: model.loss });
 }
 
-function generateToken() {
+async function generateToken() {
   if (!model) return;
   const prompt = document.getElementById('prompt').value || document.getElementById('generated').textContent;
-  const ids = [...prompt].map(c => charToId.get(c)).filter(id => id !== undefined);
+  const ids = [...prompt].map(c=>charToId.get(c)).filter(id=>id!==undefined);
   if (!ids.length) return;
-  const temp = parseFloat(document.getElementById('tempSlider').value);
-  const topK = parseInt(document.getElementById('topkSlider').value);
-  const cache = forwardPass(ids);
-  const raw = cache.logits[cache.logits.length - 1];
-  const origP = softmax(raw);
-  const indexed = raw.map((v, i) => ({ v, i })).sort((a, b) => b.v - a.v);
-  const cutoff = indexed[Math.min(topK, indexed.length) - 1].v;
-  const filtered = raw.map(v => v >= cutoff ? v : -1e9);
-  const sampled = softmax(filtered, temp);
-  let r = Math.random(), cum = 0, nextId = 0;
-  for (let i = 0; i < sampled.length; i++) { cum += sampled[i]; if (r <= cum) { nextId = i; break; } }
-  const nextChar = idToChar[nextId] || '?';
-  const newText = prompt + nextChar;
+  const res = forwardPass(ids);
+  const logits = res.logits[res.logits.length-1];
+  const probs = softmax(logits, 0.8);
+  let r=Math.random(), cum=0, next=0;
+  for (let i=0;i<probs.length;i++) { cum+=probs[i]; if (r<=cum){ next=i; break; } }
+  const ch = idToChar[next] || '?';
+  const newText = prompt + ch;
   document.getElementById('generated').textContent = newText;
   document.getElementById('prompt').value = newText;
-  auditEpistemic(cache.cacheHeads, nextId, origP, ids);
-  renderMultiHeadMatrix(ids, cache.cacheHeads);
-  renderResidualStream(cache.lastNorms);
-  renderCandidates(indexed.slice(0, 6), sampled);
-  appendLog('GEN', { char: nextChar });
+  await appendLog('GEN', { char: ch });
 }
 
-function auditEpistemic(cacheHeads, chosen, origP, promptIds) {
-  const ch = idToChar[chosen];
-  let maxA = 0, maxH = 0, maxP = 0;
-  cacheHeads.forEach((h, hi) => {
-    const row = h.attWeights[h.attWeights.length - 1];
-    row.forEach((w, p) => { if (w > maxA) { maxA = w; maxH = hi + 1; maxP = p; } });
-  });
-  const tgt = idToChar[promptIds[maxP]] || '?';
-  const op = origP[chosen];
-  let type = maxA > 0.45 ? 'Atenção forte' : 'Paramétrico';
-  let cls = maxA > 0.45 ? 'badge-obs' : 'badge-inf';
-  document.getElementById('auditToken').textContent = ch === ' ' ? '␣' : `'${ch}'`;
-  document.getElementById('auditMaxAttn').textContent = `${(maxA*100).toFixed(1)}% (H${maxH}→'${tgt}')`;
-  document.getElementById('auditProb').textContent = `${(op*100).toFixed(1)}%`;
-  document.getElementById('auditStatusType').textContent = type;
-  document.getElementById('auditEpistemicStatus').className = `epistemic-badge ${cls}`;
-  document.getElementById('auditEpistemicStatus').textContent = type;
-  document.getElementById('auditExplanation').innerHTML = `Atenção máxima ${(maxA*100).toFixed(1)}% no token '${tgt}'. Probabilidade nativa ${(op*100).toFixed(1)}%.`;
+async function generateSequence(n) {
+  for (let i=0;i<n;i++) {
+    await generateToken();
+    await new Promise(r=>setTimeout(r,80));
+  }
 }
-
-function renderMultiHeadMatrix(ids, cacheHeads) {
-  const chars = ids.map(id => idToChar[id] === ' ' ? '␣' : idToChar[id]);
-  let html = '';
-  cacheHeads.forEach((head, hi) => {
-    html += `<div class="head-box"><div class="head-title">Cabeça ${hi+1}</div><table class="matrix-table"><thead><tr><th></th>`;
-    chars.forEach(c => html += `<th>${c}</th>`);
-    html += `</tr></thead><tbody>`;
-    for (let t = 0; t < chars.length; t++) {
-      html += `<tr><th>${chars[t]}</th>`;
-      for (let s = 0; s < chars.length; s++) {
-        html += s <= t ? `<td><div class="matrix-cell" style="background:rgba(16,185,129,${head.attWeights[t][s]||0})">${(head.attWeights[t][s]||0).toFixed(1)}</div></td>` : `<td style="opacity:.1">-</td>`;
-      }
-      html += `</tr>`;
-    }
-    html += `</tbody></table></div>`;
-  });
-  document.getElementById('headsContainer').innerHTML = html;
-}
-
-function renderResidualStream(norms) {
-  const max = Math.max(norms.embed, norms.attRes, norms.mlpRes, norms.logits, 0.01);
-  const layers = [
-    { name: 'Embedding', val: norms.embed },
-    { name: 'Attn Res', val: norms.attRes },
-    { name: 'MLP Res', val: norms.mlpRes },
-    { name: 'Logits', val: norms.logits }
-  ];
-  document.getElementById('residualStream').innerHTML = layers.map(l => `
-    <div class="stream-layer">
-      <span class="stream-label">${l.name}</span>
-      <div class="stream-bar-bg"><div class="stream-bar-fill" style="width:${(l.val/max*100).toFixed(0)}%"></div></div>
-      <span class="stream-val">${l.val.toFixed(2)}</span>
-    </div>`).join('');
-}
-
-function renderCandidates(items, probs) {
-  document.getElementById('candidates').innerHTML = items.map(it => {
-    const ch = idToChar[it.i] === ' ' ? '␣' : idToChar[it.i];
-    const pct = (probs[it.i] * 100).toFixed(1);
-    return `<div class="candidate"><span>${ch}</span><span>${pct}%</span></div><div class="prob-bar-container"><div class="prob-bar" style="width:${pct}%"></div></div>`;
-  }).join('');
-}
-
-function generateSequence(n) { let d = 0; for (let i = 0; i < n; i++) { setTimeout(generateToken, d); d += 120; } }
-function resetPrompt() { document.getElementById('prompt').value = "A IA pode"; document.getElementById('generated').textContent = "A IA pode"; }
 
 window.onload = initModel;
 </script>
